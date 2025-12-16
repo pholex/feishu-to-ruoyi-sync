@@ -242,6 +242,24 @@ class RuoYiDB:
             print(f"✗ 创建用户失败: {user_data['user_name']} - {e}")
             return None
     
+    def disable_user(self, user_id, user_name, nick_name):
+        """禁用用户"""
+        if DRY_RUN:
+            print(f"[DRY-RUN] 将禁用用户: {user_name} ({nick_name})")
+            return True
+            
+        try:
+            with self.connection.cursor() as cursor:
+                sql = "UPDATE sys_user SET status = '1' WHERE user_id = %s"
+                cursor.execute(sql, (user_id,))
+                self.connection.commit()
+                print(f"✓ 禁用用户成功: {user_name} ({nick_name})")
+                return True
+        except pymysql.Error as e:
+            self.connection.rollback()
+            print(f"✗ 禁用用户失败: {user_name} - {e}")
+            return False
+
     def update_user(self, user_data, update_info=None):
         """更新用户"""
         if DRY_RUN:
@@ -578,11 +596,29 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
                     'user_id': user_name
                 })
     
+    # 处理若依中有但飞书中没有的用户（禁用，除了admin）
+    feishu_user_names = {user['user_id'] for user in feishu_users}
+    users_to_disable = []
+    
+    for user_name, user_info in ruoyi_user_map.items():
+        if user_name not in feishu_user_names and user_name != 'admin':
+            users_to_disable.append(user_info)
+    
+    disable_count = 0
+    disabled_users = []
+    for user in users_to_disable:
+        if db.disable_user(user['user_id'], user['user_name'], user['nick_name']):
+            disable_count += 1
+            disabled_users.append({
+                'name': user['nick_name'],
+                'user_id': user['user_name']
+            })
+    
     print(f"\n用户同步总结:")
-    print(f"  新建: {new_count} 个, 更新: {update_count} 个")
+    print(f"  新建: {new_count} 个, 更新: {update_count} 个, 禁用: {disable_count} 个")
     print(f"  映射关系: {len(feishu_users)} 个")
     
-    return new_count, update_count, new_users, updated_users
+    return new_count, update_count, new_users, updated_users, disable_count, disabled_users
 
 if __name__ == "__main__":
     # 检查命令行参数
@@ -649,7 +685,7 @@ if __name__ == "__main__":
         
         # 2. 同步用户
         print("\n【步骤 2/3】同步飞书用户到若依系统")
-        user_new_count, user_update_count, new_users, updated_users = sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map)
+        user_new_count, user_update_count, new_users, updated_users, user_disable_count, disabled_users = sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map)
         
         print("\n" + "=" * 50)
         if DRY_RUN:
@@ -660,7 +696,7 @@ if __name__ == "__main__":
         
         # 发送青龙通知（如果在青龙环境中运行且有实际操作）
         try:
-            if not DRY_RUN and (dept_created_count > 0 or dept_updated_count > 0 or dept_disabled_count > 0 or user_new_count > 0 or user_update_count > 0):
+            if not DRY_RUN and (dept_created_count > 0 or dept_updated_count > 0 or dept_disabled_count > 0 or user_new_count > 0 or user_update_count > 0 or user_disable_count > 0):
                 notify_lines = []
                 
                 # 部门操作
@@ -690,6 +726,14 @@ if __name__ == "__main__":
                         details_str += f"\n...等共{user_update_count}个用户"
                     notify_lines.append(f"用户更新:\n{details_str}")
                 
+                # 用户禁用明细
+                if user_disable_count > 0:
+                    disabled_names = [f"{user['name']}({user['user_id']})" for user in disabled_users[:5]]
+                    names_str = ', '.join(disabled_names)
+                    if user_disable_count > 5:
+                        names_str += f"等{user_disable_count}个"
+                    notify_lines.append(f"用户禁用: {names_str}")
+                
                 notify_content = '\n'.join(notify_lines)
                 
                 QLAPI.systemNotify({
@@ -699,7 +743,7 @@ if __name__ == "__main__":
                 print("✓ 青龙系统通知已发送")
         except (NameError, AttributeError):
             # 不在青龙环境中，跳过通知
-            if not DRY_RUN and (dept_created_count > 0 or dept_updated_count > 0 or dept_disabled_count > 0 or user_new_count > 0 or user_update_count > 0):
+            if not DRY_RUN and (dept_created_count > 0 or dept_updated_count > 0 or dept_disabled_count > 0 or user_new_count > 0 or user_update_count > 0 or user_disable_count > 0):
                 print("⚠ 未检测到青龙环境，跳过系统通知")
         except Exception as e:
             # 其他错误（如网络问题等）
