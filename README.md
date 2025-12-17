@@ -91,11 +91,11 @@ python3 sync_to_ruoyi_db.py
 
 | 飞书字段 | 若依字段 | 说明 |
 |---------|---------|------|
-| user_id | user_name | 用户登录名（员工工号） |
+| user_id | user_name | 用户登录名 |
 | name | nick_name | 用户显示名称 |
 | enterprise_email | email | 企业邮箱 |
-| union_id | feishu_union_id | 飞书唯一标识 |
-| user_id | feishu_open_id | 飞书OpenID |
+| union_id | feishu_union_id | 飞书唯一标识（跨应用） |
+| open_id | feishu_open_id | 飞书OpenID（应用级） |
 | dept_id | dept_id | 部门关联（通过feishu_dept_id匹配） |
 
 ## 文档

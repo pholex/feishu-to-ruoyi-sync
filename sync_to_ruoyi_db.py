@@ -544,7 +544,8 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
     
     for feishu_user in feishu_users:
         union_id = feishu_user.get('union_id', '')
-        user_id = feishu_user['user_id']  # 飞书的user_id作为open_id
+        open_id = feishu_user.get('open_id', '')  # 飞书真正的open_id
+        user_id = feishu_user['user_id']  # 飞书的user_id（员工工号）
         user_name = feishu_user['user_id']  # 使用user_id作为用户名
         nick_name = feishu_user['name']
         email = feishu_user['enterprise_email']
@@ -571,7 +572,7 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
             'sex': '0',  # 未知
             'dept_id': ruoyi_dept_id,
             'feishu_union_id': union_id,  # 将union_id存储在feishu_union_id字段中
-            'feishu_open_id': user_id  # 将user_id存储在feishu_open_id字段中
+            'feishu_open_id': open_id  # 将open_id存储在feishu_open_id字段中
         }
         
         if existing_user:
@@ -603,8 +604,8 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
                 
                 update_info.append(f"部门: {old_dept_name} -> {new_dept_name}")
             
-            if existing_user.get('feishu_open_id', '') != user_id:
-                update_info.append(f"飞书OpenID: {existing_user.get('feishu_open_id', '')} -> {user_id}")
+            if existing_user.get('feishu_open_id', '') != open_id:
+                update_info.append(f"飞书OpenID: {existing_user.get('feishu_open_id', '')} -> {open_id}")
             
             # 更新用户
             user_data['user_id'] = existing_user['user_id']
