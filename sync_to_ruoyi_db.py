@@ -386,6 +386,10 @@ def sync_departments(db):
                 needs_update = True
                 update_info.append(f"父部门ID: {existing_dept['parent_id']} -> {parent_ruoyi_id}")
             
+            if not existing_dept.get('ancestors'):
+                needs_update = True
+                update_info.append("ancestors: 空 -> 补充")
+            
             if needs_update:
                 dept_updated_count += 1
                 # 构建ancestors字段
