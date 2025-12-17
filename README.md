@@ -16,6 +16,21 @@
 
 参考 [若依系统配置](docs/RUOYI_SETUP.md) 配置若依系统数据库表结构。
 
+#### 扩展用户表结构
+
+执行以下 SQL 语句扩展 sys_user 表以支持飞书字段：
+
+```sql
+-- 扩展用户表，添加飞书相关字段
+ALTER TABLE sys_user 
+ADD COLUMN feishu_open_id VARCHAR(100) COMMENT '飞书OpenID',
+ADD COLUMN feishu_union_id VARCHAR(100) COMMENT '飞书UnionID';
+
+-- 为飞书字段添加索引
+CREATE INDEX idx_sys_user_feishu_open_id ON sys_user(feishu_open_id);
+CREATE INDEX idx_sys_user_feishu_union_id ON sys_user(feishu_union_id);
+```
+
 ### 2. 创建飞书应用
 
 1. 访问 [飞书开放平台](https://open.feishu.cn/) 创建企业自建应用
@@ -79,7 +94,8 @@ python3 sync_to_ruoyi_db.py
 | user_id | user_name | 用户登录名（员工工号） |
 | name | nick_name | 用户显示名称 |
 | enterprise_email | email | 企业邮箱 |
-| union_id | remark | 飞书唯一标识（存储在备注字段） |
+| union_id | feishu_union_id | 飞书唯一标识 |
+| user_id | feishu_open_id | 飞书OpenID |
 | dept_id | dept_id | 部门关联（通过feishu_dept_id匹配） |
 
 ## 文档

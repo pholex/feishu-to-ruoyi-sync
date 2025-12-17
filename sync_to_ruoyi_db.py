@@ -224,8 +224,8 @@ class RuoYiDB:
                 sql = """
                 INSERT INTO sys_user (dept_id, user_name, nick_name, user_type, 
                                     email, phonenumber, sex, password, status, 
-                                    del_flag, create_by, create_time, remark)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    del_flag, create_by, create_time, feishu_union_id, feishu_open_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 cursor.execute(sql, (
                     user_data['dept_id'],
@@ -240,7 +240,8 @@ class RuoYiDB:
                     '0',  # 未删除
                     'feishu_sync',
                     datetime.now(),
-                    user_data.get('remark', '')
+                    user_data.get('feishu_union_id', ''),
+                    user_data.get('feishu_open_id', '')
                 ))
                 user_id = cursor.lastrowid
                 
@@ -291,7 +292,7 @@ class RuoYiDB:
                 sql = """
                 UPDATE sys_user SET dept_id = %s, nick_name = %s, email = %s, 
                                   phonenumber = %s, sex = %s, update_by = %s, 
-                                  update_time = %s, remark = %s
+                                  update_time = %s, feishu_open_id = %s
                 WHERE user_id = %s
                 """
                 cursor.execute(sql, (
@@ -302,7 +303,7 @@ class RuoYiDB:
                     user_data.get('sex', '0'),
                     'feishu_sync',
                     datetime.now(),
-                    user_data.get('remark', ''),
+                    user_data.get('feishu_open_id', ''),
                     user_data['user_id']
                 ))
                 self.connection.commit()
@@ -530,9 +531,11 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
     
     ruoyi_user_map = {}
     
-    # 建立用户映射（使用用户名）
+    # 建立用户映射（使用feishu_union_id）
     for user in ruoyi_users:
-        ruoyi_user_map[user['user_name']] = user
+        union_id = user.get('feishu_union_id', '')
+        if union_id:  # 只有有union_id的用户才加入映射
+            ruoyi_user_map[union_id] = user
     
     new_count = 0
     update_count = 0
@@ -541,18 +544,24 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
     
     for feishu_user in feishu_users:
         union_id = feishu_user.get('union_id', '')
+        user_id = feishu_user['user_id']  # 飞书的user_id作为open_id
         user_name = feishu_user['user_id']  # 使用user_id作为用户名
         nick_name = feishu_user['name']
         email = feishu_user['enterprise_email']
         dept_id = feishu_user.get('dept_id', '')
         
+        # 跳过没有union_id的用户
+        if not union_id:
+            print(f"⚠️  跳过用户 {user_name} ({nick_name}): 缺少union_id")
+            continue
+        
         # 获取对应的若依部门ID
         ruoyi_dept_id = dept_id_map.get(dept_id, 100)  # 默认根部门
         
-        # 检查用户是否存在（通过user_name匹配）
+        # 检查用户是否存在（通过union_id匹配）
         existing_user = None
-        if user_name in ruoyi_user_map:
-            existing_user = ruoyi_user_map[user_name]
+        if union_id in ruoyi_user_map:
+            existing_user = ruoyi_user_map[union_id]
         
         user_data = {
             'user_name': user_name,
@@ -561,7 +570,8 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
             'phonenumber': '',
             'sex': '0',  # 未知
             'dept_id': ruoyi_dept_id,
-            'remark': union_id  # 将union_id存储在备注字段中
+            'feishu_union_id': union_id,  # 将union_id存储在feishu_union_id字段中
+            'feishu_open_id': user_id  # 将user_id存储在feishu_open_id字段中
         }
         
         if existing_user:
@@ -593,8 +603,8 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
                 
                 update_info.append(f"部门: {old_dept_name} -> {new_dept_name}")
             
-            if existing_user.get('remark', '') != union_id:
-                update_info.append(f"备注(union_id): {existing_user.get('remark', '')} -> {union_id}")
+            if existing_user.get('feishu_open_id', '') != user_id:
+                update_info.append(f"飞书OpenID: {existing_user.get('feishu_open_id', '')} -> {user_id}")
             
             # 更新用户
             user_data['user_id'] = existing_user['user_id']
@@ -620,12 +630,15 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
                 })
     
     # 处理若依中有但飞书中没有的用户（禁用，除了admin）
-    feishu_user_names = {user['user_id'] for user in feishu_users}
+    feishu_union_ids = {user.get('union_id', '') for user in feishu_users if user.get('union_id', '')}
     users_to_disable = []
     
-    for user_name, user_info in ruoyi_user_map.items():
-        if user_name not in feishu_user_names and user_name != 'admin':
-            users_to_disable.append(user_info)
+    # 检查所有若依用户，找出不在飞书中的用户
+    for user in ruoyi_users:
+        user_union_id = user.get('feishu_union_id', '')
+        # 如果用户有union_id但不在飞书用户中，且不是admin，则禁用
+        if user_union_id and user_union_id not in feishu_union_ids and user['user_name'] != 'admin':
+            users_to_disable.append(user)
     
     disable_count = 0
     disabled_users = []
