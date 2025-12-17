@@ -181,6 +181,24 @@ class RuoYiDB:
             print(f"✗ 更新部门失败: {dept_data['dept_name']} - {e}")
             return False
     
+    def disable_department(self, dept_id, dept_name):
+        """禁用部门"""
+        if DRY_RUN:
+            print(f"[DRY-RUN] 将禁用部门: {dept_name} (ID: {dept_id})")
+            return True
+            
+        try:
+            with self.connection.cursor() as cursor:
+                sql = "UPDATE sys_dept SET status = '1' WHERE dept_id = %s"
+                cursor.execute(sql, (dept_id,))
+                self.connection.commit()
+                print(f"✓ 禁用部门成功: {dept_name} (ID: {dept_id})")
+                return True
+        except pymysql.Error as e:
+            self.connection.rollback()
+            print(f"✗ 禁用部门失败: {dept_name} - {e}")
+            return False
+    
     def get_users(self):
         """获取用户列表"""
         try:
@@ -469,13 +487,14 @@ def sync_departments(db):
     
     for dept in ruoyi_depts:
         feishu_id = dept.get('feishu_dept_id')
-        if feishu_id and feishu_id not in feishu_dept_ids and dept.get('del_flag') == '0':
+        if feishu_id and feishu_id not in feishu_dept_ids and dept.get('del_flag') == '0' and dept.get('status') == '0':
             departments_to_disable.append(dept)
     
-    if DRY_RUN and departments_to_disable:
+    # 执行禁用部门
+    if departments_to_disable:
         print(f"\n需要禁用的部门: {len(departments_to_disable)} 个")
         for dept in departments_to_disable:
-            print(f"[DRY-RUN] 将禁用部门: {dept['dept_name']} (ID: {dept['dept_id']})")
+            db.disable_department(dept['dept_id'], dept['dept_name'])
     
     # 部门操作总结
     print(f"\n部门同步总结:")
