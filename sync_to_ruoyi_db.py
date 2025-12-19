@@ -637,8 +637,9 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
     # 检查所有若依用户，找出不在飞书中的用户
     for user in ruoyi_users:
         user_union_id = user.get('feishu_union_id', '')
-        # 如果用户有union_id但不在飞书用户中，且不是admin，则禁用
-        if user_union_id and user_union_id not in feishu_union_ids and user['user_name'] != 'admin':
+        # 如果用户有union_id但不在飞书用户中，且不是admin，且当前状态为正常（未禁用），则禁用
+        if (user_union_id and user_union_id not in feishu_union_ids and 
+            user['user_name'] != 'admin' and user.get('status') == '0'):
             users_to_disable.append(user)
     
     disable_count = 0
