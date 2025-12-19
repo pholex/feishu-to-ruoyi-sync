@@ -508,6 +508,21 @@ def sync_departments(db):
     
     return dept_id_map, ruoyi_depts, ruoyi_dept_map, dept_created_count, dept_updated_count, len(departments_to_disable)
 
+def extract_china_mobile(mobile_str):
+    """提取中国大陆手机号（+86开头）的后11位数字"""
+    if not mobile_str:
+        return ''
+    
+    # 移除所有非数字字符，保留+号用于判断
+    import re
+    if mobile_str.startswith('+86'):
+        # 提取+86后面的数字
+        digits = re.sub(r'[^\d]', '', mobile_str[3:])
+        # 验证是否为11位中国手机号
+        if len(digits) == 11 and digits.startswith(('13', '14', '15', '16', '17', '18', '19')):
+            return digits
+    return ''
+
 def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
     """同步用户到若依系统"""
     users_csv = get_output_path('feishu_users.csv')
@@ -549,6 +564,7 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
         user_name = feishu_user['user_id']  # 使用user_id作为用户名
         nick_name = feishu_user['name']
         email = feishu_user['enterprise_email']
+        mobile = extract_china_mobile(feishu_user.get('mobile', ''))
         dept_id = feishu_user.get('dept_id', '')
         
         # 跳过没有union_id的用户
@@ -568,7 +584,7 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
             'user_name': user_name,
             'nick_name': nick_name,
             'email': email,
-            'phonenumber': '',
+            'phonenumber': mobile,
             'sex': '0',  # 未知
             'dept_id': ruoyi_dept_id,
             'feishu_union_id': union_id,  # 将union_id存储在feishu_union_id字段中
@@ -584,6 +600,9 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
             
             if existing_user['email'] != email:
                 update_info.append(f"邮箱: {existing_user['email']} -> {email}")
+            
+            if existing_user.get('phonenumber', '') != mobile:
+                update_info.append(f"手机号: {existing_user.get('phonenumber', '')} -> {mobile}")
             
             if existing_user['dept_id'] != ruoyi_dept_id:
                 # 获取部门名称用于显示
