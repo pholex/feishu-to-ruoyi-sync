@@ -94,6 +94,7 @@ python3 sync_to_ruoyi_db.py
 | user_id | user_name | 用户登录名 |
 | name | nick_name | 用户显示名称 |
 | enterprise_email | email | 企业邮箱 |
+| mobile | phonenumber | 手机号（仅同步+86开头的中国大陆手机号） |
 | union_id | feishu_union_id | 飞书唯一标识（跨应用） |
 | open_id | feishu_open_id | 飞书OpenID（应用级） |
 | dept_id | dept_id | 部门关联（通过feishu_dept_id匹配） |
