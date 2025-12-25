@@ -246,8 +246,8 @@ class RuoYiDB:
                 user_id = cursor.lastrowid
                 
                 # 分配默认角色
-                role_sql = "INSERT INTO sys_user_role (user_id, role_id) VALUES (%s, %s)"
-                cursor.execute(role_sql, (user_id, 2))  # 普通角色
+                # role_sql = "INSERT INTO sys_user_role (user_id, role_id) VALUES (%s, %s)"
+                # cursor.execute(role_sql, (user_id, 2))  # 普通角色
                 
                 self.connection.commit()
                 print(f"✓ 创建用户成功: {user_data['user_name']} ({user_data['nick_name']})")
