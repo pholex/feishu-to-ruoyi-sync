@@ -291,7 +291,7 @@ class RuoYiDB:
             with self.connection.cursor() as cursor:
                 sql = """
                 UPDATE sys_user SET dept_id = %s, nick_name = %s, email = %s, 
-                                  phonenumber = %s, sex = %s, update_by = %s, 
+                                  phonenumber = %s, sex = %s, status = '0', update_by = %s, 
                                   update_time = %s, feishu_open_id = %s
                 WHERE user_id = %s
                 """
@@ -625,6 +625,10 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
             
             if existing_user.get('feishu_open_id', '') != open_id:
                 update_info.append(f"飞书OpenID: {existing_user.get('feishu_open_id', '')} -> {open_id}")
+            
+            # 检查用户状态，如果被禁用则需要启用
+            if existing_user.get('status', '0') != '0':
+                update_info.append(f"状态: 禁用 -> 启用")
             
             # 更新用户
             user_data['user_id'] = existing_user['user_id']
