@@ -290,8 +290,9 @@ class RuoYiDB:
         try:
             with self.connection.cursor() as cursor:
                 sql = """
-                UPDATE sys_user SET dept_id = %s, nick_name = %s, email = %s, 
-                                  phonenumber = %s, sex = %s, status = '0', update_by = %s, 
+                UPDATE sys_user SET dept_id = %s, nick_name = %s,
+                                  email = COALESCE(NULLIF(%s, ''), email),
+                                  phonenumber = %s, sex = %s, status = '0', update_by = %s,
                                   update_time = %s, feishu_open_id = %s
                 WHERE user_id = %s
                 """
@@ -563,7 +564,7 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
         user_id = feishu_user['user_id']  # 飞书的user_id（员工工号）
         user_name = feishu_user['user_id']  # 使用user_id作为用户名
         nick_name = feishu_user['name']
-        email = feishu_user['enterprise_email']
+        email = (feishu_user.get('enterprise_email') or '').strip()
         mobile = extract_china_mobile(feishu_user.get('mobile', ''))
         dept_id = feishu_user.get('dept_id', '')
         
@@ -598,10 +599,10 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
             if existing_user['nick_name'] != nick_name:
                 update_info.append(f"姓名: {existing_user['nick_name']} -> {nick_name}")
             
-            if existing_user['email'] != email:
+            if email and existing_user['email'] != email:
                 update_info.append(f"邮箱: {existing_user['email']} -> {email}")
             
-            if existing_user.get('phonenumber', '') != mobile:
+            if mobile and existing_user.get('phonenumber', '') != mobile:
                 update_info.append(f"手机号: {existing_user.get('phonenumber', '')} -> {mobile}")
             
             if existing_user['dept_id'] != ruoyi_dept_id:
