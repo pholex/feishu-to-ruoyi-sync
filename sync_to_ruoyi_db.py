@@ -470,7 +470,8 @@ def sync_departments(db):
     dept_unchanged_count = 0
     
     # 按层级顺序创建部门
-    for level in range(6):  # level 0-5
+    max_level = max(int(d['level']) for d in feishu_depts) if feishu_depts else 0
+    for level in range(max_level + 1):
         level_depts = [dept for dept in feishu_depts if int(dept['level']) == level]
         print(f"处理 Level {level} 部门: {len(level_depts)} 个")
         
@@ -498,7 +499,7 @@ def sync_departments(db):
     print(f"  新建: {dept_created_count} 个, 更新: {dept_updated_count} 个, 禁用: {len(departments_to_disable)} 个")
     print(f"  映射关系: {len(dept_id_map)} 个")
     
-    return dept_id_map, ruoyi_depts, ruoyi_dept_map, dept_created_count, dept_updated_count, len(departments_to_disable)
+    return dept_id_map, ruoyi_depts, ruoyi_dept_map, ruoyi_dept_by_id, dept_created_count, dept_updated_count, len(departments_to_disable)
 
 def extract_china_mobile(mobile_str):
     """提取中国大陆手机号（+86开头）的后11位数字"""
@@ -515,7 +516,7 @@ def extract_china_mobile(mobile_str):
             return digits
     return ''
 
-def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
+def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map, ruoyi_dept_by_id):
     """同步用户到若依系统"""
     users_csv = get_output_path('feishu_users.csv')
     if not os.path.exists(users_csv):
@@ -598,20 +599,10 @@ def sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map):
             
             if existing_user['dept_id'] != ruoyi_dept_id:
                 # 获取部门名称用于显示
-                old_dept_name = "未知部门"
-                new_dept_name = "未知部门"
-                
-                # 查找旧部门名称
-                for dept in ruoyi_depts:
-                    if dept['dept_id'] == existing_user['dept_id']:
-                        old_dept_name = dept['dept_name']
-                        break
-                
-                # 查找新部门名称
-                for dept_id, dept in ruoyi_dept_map.items():
-                    if dept['dept_id'] == ruoyi_dept_id:
-                        new_dept_name = dept['dept_name']
-                        break
+                old_dept = ruoyi_dept_by_id.get(existing_user['dept_id'])
+                old_dept_name = old_dept['dept_name'] if old_dept else "未知部门"
+                new_dept = ruoyi_dept_by_id.get(ruoyi_dept_id)
+                new_dept_name = new_dept['dept_name'] if new_dept else "未知部门"
                 
                 update_info.append(f"部门: {old_dept_name} -> {new_dept_name}")
             
@@ -734,11 +725,11 @@ if __name__ == "__main__":
     try:
         # 1. 同步部门
         print("\n【步骤 1/3】同步飞书部门结构到若依系统")
-        dept_id_map, ruoyi_depts, ruoyi_dept_map, dept_created_count, dept_updated_count, dept_disabled_count = sync_departments(db)
+        dept_id_map, ruoyi_depts, ruoyi_dept_map, ruoyi_dept_by_id, dept_created_count, dept_updated_count, dept_disabled_count = sync_departments(db)
         
         # 2. 同步用户
         print("\n【步骤 2/3】同步飞书用户到若依系统")
-        user_new_count, user_update_count, new_users, updated_users, user_disable_count, disabled_users = sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map)
+        user_new_count, user_update_count, new_users, updated_users, user_disable_count, disabled_users = sync_users(db, dept_id_map, ruoyi_depts, ruoyi_dept_map, ruoyi_dept_by_id)
         
         print("\n" + "=" * 50)
         if DRY_RUN:
