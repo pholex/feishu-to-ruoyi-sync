@@ -349,6 +349,18 @@ def sync_departments(db):
     # 构建部门ID映射
     dept_id_map = {}  # feishu_dept_id -> ruoyi_dept_id
     
+    # 按 dept_id 索引，方便快速查找和就地更新
+    ruoyi_dept_by_id = {dept['dept_id']: dept for dept in ruoyi_depts}
+    
+    def _build_ancestors(parent_ruoyi_id, dept_by_id):
+        """递归构建正确的 ancestors 链"""
+        if parent_ruoyi_id == 100:
+            return "0,100"
+        parent = dept_by_id.get(parent_ruoyi_id)
+        if parent and parent.get('ancestors'):
+            return f"{parent['ancestors']},{parent_ruoyi_id}"
+        return f"0,100,{parent_ruoyi_id}"
+    
     # 操作计数器
     dept_created_count = 0
     dept_updated_count = 0
@@ -392,54 +404,32 @@ def sync_departments(db):
                 needs_update = True
                 update_info.append("ancestors: 空 -> 补充")
             
+            # 始终重新计算 ancestors（基于父部门的最新 ancestors）
+            ancestors = _build_ancestors(parent_ruoyi_id, ruoyi_dept_by_id)
+            
+            if ancestors != existing_dept.get('ancestors', ''):
+                needs_update = True
+                update_info.append(f"ancestors: {existing_dept.get('ancestors', '')} -> {ancestors}")
+            
             if needs_update:
                 dept_updated_count += 1
-                # 构建ancestors字段
-                if parent_ruoyi_id == 100:
-                    ancestors = "0,100"
-                else:
-                    # 查找父部门的ancestors
-                    parent_dept = None
-                    for d in ruoyi_depts:
-                        if d['dept_id'] == parent_ruoyi_id:
-                            parent_dept = d
-                            break
-                    
-                    if parent_dept and parent_dept.get('ancestors'):
-                        ancestors = f"{parent_dept['ancestors']},{parent_ruoyi_id}"
-                    else:
-                        ancestors = f"0,100,{parent_ruoyi_id}"
-                
-                # 准备更新数据
                 dept_data = {
                     'dept_name': dept['dept_name'],
                     'parent_id': parent_ruoyi_id,
                     'ancestors': ancestors,
                     'level': int(dept['level'])
                 }
-                
-                # 执行更新
                 db.update_department(existing_dept['dept_id'], dept_data, update_info)
-            # 不显示"无需更新"的部门，减少输出噪音
+                # 同步更新内存中的数据，确保子部门能拿到最新 ancestors
+                existing_dept['dept_name'] = dept['dept_name']
+                existing_dept['parent_id'] = parent_ruoyi_id
+                existing_dept['ancestors'] = ancestors
+                existing_dept['level'] = int(dept['level'])
             
             return existing_dept['dept_id']
         
         # 构建ancestors字段
-        if parent_ruoyi_id == 100:
-            ancestors = "0,100"
-        else:
-            # 查找父部门的ancestors
-            parent_dept = None
-            # 先在现有部门中查找
-            for d in ruoyi_depts:
-                if d['dept_id'] == parent_ruoyi_id:
-                    parent_dept = d
-                    break
-            
-            if parent_dept and parent_dept.get('ancestors'):
-                ancestors = f"{parent_dept['ancestors']},{parent_ruoyi_id}"
-            else:
-                ancestors = f"0,100,{parent_ruoyi_id}"
+        ancestors = _build_ancestors(parent_ruoyi_id, ruoyi_dept_by_id)
         
         # 创建新部门
         dept_data = {
@@ -455,7 +445,7 @@ def sync_departments(db):
         if new_dept_id:
             dept_created_count += 1
             dept_id_map[dept_id] = new_dept_id
-            # 更新ruoyi_depts列表
+            # 更新内存索引，确保子部门能查到正确的 ancestors
             new_dept = {
                 'dept_id': new_dept_id,
                 'parent_id': parent_ruoyi_id,
@@ -466,6 +456,7 @@ def sync_departments(db):
             }
             ruoyi_depts.append(new_dept)
             ruoyi_dept_map[dept_id] = new_dept
+            ruoyi_dept_by_id[new_dept_id] = new_dept
             return new_dept_id
         
         return parent_ruoyi_id
