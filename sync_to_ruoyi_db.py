@@ -44,7 +44,7 @@ DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")
 
-# 默认用户密码配置（BCrypt加密后的123456）
+# 默认用户密码配置（BCrypt加密后的admin123）
 DEFAULT_USER_PASSWORD_HASH = os.getenv("DEFAULT_USER_PASSWORD_HASH", "$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2")
 
 # Dry-run 模式标志
